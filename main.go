@@ -10,8 +10,8 @@ import (
 func main() {
 
 	var host, port string
-	flag.StringVar(&host, "h", "localhost", "Server Host. Defaults to localhost")
-	flag.StringVar(&port, "p", "2000", "Server Port. Defaults to 2000")
+	flag.StringVar(&host, "h", "localhost", "Server Host.")
+	flag.StringVar(&port, "p", "2000", "Server Port.")
 	flag.Parse()
 
 	addr := host + ":" + port

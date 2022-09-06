@@ -1,0 +1,2 @@
+# ignore go build directory
+bin/*
