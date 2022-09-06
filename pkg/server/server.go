@@ -14,12 +14,19 @@ func DefaultMux() *http.ServeMux {
 }
 
 type httpServer struct {
+	// keeps pointer to the original mux object,
+	// which gives opportunity to directly call its methods
+	// i.e., to update its handlers
 	server *http.Server
 	mux    *http.ServeMux
 }
 
 func NewHttpServer(mux *http.ServeMux, addr string) httpServer {
-	return httpServer{mux: mux, server: &http.Server{Addr: addr}}
+	return httpServer{mux: mux, server: &http.Server{Addr: addr, Handler: mux}}
+}
+
+func (srv *httpServer) Addr() string {
+	return srv.server.Addr
 }
 
 func (srv *httpServer) RegisterEndpoints(routes map[string]func(http.ResponseWriter, *http.Request)) {

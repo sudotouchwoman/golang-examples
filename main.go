@@ -19,7 +19,7 @@ func main() {
 	srv := server.NewHttpServer(server.DefaultMux(), addr)
 	srv.RegisterEndpoints(server.GetRoutes())
 
-	log.Default().Printf("Starting serving on %s:%s...\n", host, port)
+	log.Default().Printf("Starting serving at %s", srv.Addr())
 	// starts serving on given port
 	// and blocks until some error occurs
 	srv.ServeGracefully()
