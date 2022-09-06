@@ -16,15 +16,14 @@ func getHello(w http.ResponseWriter, _ *http.Request) {
 	io.WriteString(w, "Hello there!\n")
 }
 
-func GetRoutes() map[string]func(http.ResponseWriter, *http.Request) {
-	return map[string]func(http.ResponseWriter, *http.Request){
-		"hello": getHello,
-		"root":  getRoot,
-	}
+func onShutdown(w http.ResponseWriter, _ *http.Request) {
+	log.Default().Println("got /shutdown request")
+	io.WriteString(w, "Shutting server down\n")
 }
 
-func HandleRoutes(mux *http.ServeMux, routes map[string]func(http.ResponseWriter, *http.Request)) {
-	for r, fun := range routes {
-		mux.HandleFunc(r, fun)
+func GetRoutes() map[string]func(http.ResponseWriter, *http.Request) {
+	return map[string]func(http.ResponseWriter, *http.Request){
+		"/hello": getHello,
+		"/":      getRoot,
 	}
 }
