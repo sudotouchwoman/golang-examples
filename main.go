@@ -17,7 +17,7 @@ func main() {
 
 	srv := server.NewHttpServer(mux.NewRouter(), host+":"+port)
 	// apply some middleware to intercept
-	srv.WrapHandler(server.LogRequests)
+	srv.WrapHandler(server.LogResponseCode, server.LogRemoteAddr)
 
 	// add endpoint handlers
 	srv.RegisterEndpoints(server.GetEndpoints(), "GET")

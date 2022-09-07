@@ -17,7 +17,14 @@ func (rwi *proxyResponseWriter) WriteHeader(code int) {
 	rwi.ResponseWriter.WriteHeader(code)
 }
 
-func LogRequests(handler http.Handler) http.Handler {
+func LogRemoteAddr(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Default().Printf("%s %v (%s)", r.Method, r.URL, r.RemoteAddr)
+		handler.ServeHTTP(w, r)
+	})
+}
+
+func LogResponseCode(handler http.Handler) http.Handler {
 	// log incoming requests and their corresponding response codes
 	// the response code is 200 by default as custom handlers may not
 	// call the WriteHeader method directly
