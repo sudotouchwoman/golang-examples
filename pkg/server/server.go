@@ -48,9 +48,10 @@ func (srv *httpServer) WrapHandler(wrapper ...func(http.Handler) http.Handler) {
 
 func (srv *httpServer) ServeGracefully() {
 	// create channel to listen to system signals
-	// exit peacefully when signal is recieved
-	gotSignal := make(chan os.Signal, 1)
-	signal.Notify(gotSignal, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	// exit peacefully once signal is recieved
+	getShutdownRequest := make(chan bool, 1)
+	gotInterruptSignal := make(chan os.Signal, 1)
+	signal.Notify(gotInterruptSignal, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -59,7 +60,7 @@ func (srv *httpServer) ServeGracefully() {
 	// this may actually imply some validation steps
 	srv.mu.HandleFunc("/shutdown", func(w http.ResponseWriter, r *http.Request) {
 		onShutdown(w, r)
-		defer cancel()
+		getShutdownRequest <- true
 	}).Methods(http.MethodGet)
 
 	// launch server in a separate goroutine
@@ -72,7 +73,8 @@ func (srv *httpServer) ServeGracefully() {
 	// block this goroutine until given signal occurs
 	// or the context is released by request to /shutdown
 	select {
-	case <-gotSignal:
+	case <-gotInterruptSignal:
+	case <-getShutdownRequest:
 	case <-ctx.Done():
 		if err := srv.server.Shutdown(ctx); err != nil {
 			log.Default().Fatalf("Server shutdown aborted: %+v\n", err)
