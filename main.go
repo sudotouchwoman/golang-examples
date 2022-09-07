@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 
+	"github.com/gorilla/mux"
 	"github.com/sudotouchwoman/golang-examples/pkg/server"
 )
 
@@ -14,10 +15,12 @@ func main() {
 	flag.StringVar(&port, "p", "2000", "Server Port.")
 	flag.Parse()
 
-	addr := host + ":" + port
+	srv := server.NewHttpServer(mux.NewRouter(), host+":"+port)
+	// apply some middleware to intercept
+	srv.WrapHandler(server.LogRequests)
 
-	srv := server.NewHttpServer(server.DefaultMux(), addr)
-	srv.RegisterEndpoints(server.GetRoutes())
+	// add endpoint handlers
+	srv.RegisterEndpoints(server.GetEndpoints(), "GET")
 
 	log.Default().Printf("Starting serving at %s", srv.Addr())
 	// starts serving on given port

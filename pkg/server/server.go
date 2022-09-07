@@ -7,38 +7,43 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-)
 
-func DefaultMux() *http.ServeMux {
-	return http.NewServeMux()
-}
+	"github.com/gorilla/mux"
+)
 
 type httpServer struct {
 	// keeps pointer to the original mux object,
 	// which gives opportunity to directly call its methods
 	// i.e., to update its handlers
 	server *http.Server
-	mux    *http.ServeMux
+	mu     *mux.Router
 }
 
-func NewHttpServer(mux *http.ServeMux, addr string) httpServer {
-	return httpServer{mux: mux, server: &http.Server{Addr: addr, Handler: mux}}
+func NewHttpServer(m *mux.Router, addr string) httpServer {
+	return httpServer{mu: m, server: &http.Server{Addr: addr, Handler: m}}
 }
 
 func (srv *httpServer) Addr() string {
 	return srv.server.Addr
 }
 
-func (srv *httpServer) RegisterEndpoints(routes map[string]func(http.ResponseWriter, *http.Request)) {
-	if srv.mux == nil {
+func (srv *httpServer) RegisterEndpoints(routes map[string]func(http.ResponseWriter, *http.Request), httpmethods ...string) {
+	if srv.mu == nil {
 		log.Default().Println("HttpServer has no mux configured!")
 		return
 	}
 
 	for r, fun := range routes {
-		srv.mux.HandleFunc(r, fun)
+		srv.mu.HandleFunc(r, fun).Methods(httpmethods...)
 	}
-	log.Default().Printf("Registered %d new endpoints\n", len(routes))
+}
+
+func (srv *httpServer) WrapHandler(wrapper ...func(http.Handler) http.Handler) {
+	// applies given sequence to the server's handler
+	// note that the order of passed wrappers is preserved
+	for _, w := range wrapper {
+		srv.server.Handler = w(srv.server.Handler)
+	}
 }
 
 func (srv *httpServer) ServeGracefully() {
@@ -52,10 +57,10 @@ func (srv *httpServer) ServeGracefully() {
 
 	// stop the server on shutdown endpoint
 	// this may actually imply some validation steps
-	srv.mux.HandleFunc("/shutdown", func(w http.ResponseWriter, r *http.Request) {
+	srv.mu.HandleFunc("/shutdown", func(w http.ResponseWriter, r *http.Request) {
 		onShutdown(w, r)
-		cancel()
-	})
+		defer cancel()
+	}).Methods(http.MethodGet)
 
 	// launch server in a separate goroutine
 	go func() {
