@@ -70,5 +70,17 @@ func ApiPublicEndpoints() []Route {
 			"/hello",
 			http.HandlerFunc(getHello),
 		},
+		{
+			"Quote",
+			http.MethodGet,
+			"/quote",
+			http.HandlerFunc(getRandomQuote),
+		},
+		{
+			"ManyQuotes",
+			http.MethodGet,
+			"/quote/{nquotes}",
+			http.HandlerFunc(getManyQuotes),
+		},
 	}
 }
