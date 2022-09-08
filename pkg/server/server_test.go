@@ -1,22 +1,20 @@
 package server
 
 import (
+	"net/http"
 	"testing"
-
-	"github.com/gorilla/mux"
 )
 
-func TestHttpServer_MuProperty(t *testing.T) {
+func TestNewHttpServer(t *testing.T) {
 	expectedAddr := "localhost:8080"
-	mu := mux.NewRouter()
-	srv := NewHttpServer(mu, expectedAddr)
+	srv := New(http.NewServeMux(), expectedAddr)
 
-	if !(mu == srv.mu && mu == srv.server.Handler) {
-		t.Errorf("Pointers to Router do not match!")
+	if got := srv.Addr(); got != expectedAddr {
+		t.Errorf("srv.Addr() = %s; want %s", got, expectedAddr)
 	}
 
-	got := srv.Addr()
-	if got != expectedAddr {
-		t.Errorf("srv.Addr() = %s; want %s", got, expectedAddr)
+	expectedEmpty := 0
+	if got := len(srv.Quit()); got != expectedEmpty {
+		t.Errorf("len(srv.Quit()) = %d; want %d", got, expectedEmpty)
 	}
 }

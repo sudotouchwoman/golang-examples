@@ -7,61 +7,40 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-
-	"github.com/gorilla/mux"
+	"time"
 )
 
 type httpServer struct {
-	// keeps pointer to the original mux object,
-	// which gives opportunity to directly call its methods
-	// i.e., to update its handlers
+	// Server that can be interrupted externally
+	// using channels
 	server *http.Server
-	mu     *mux.Router
+	quit   chan bool
 }
 
-func NewHttpServer(m *mux.Router, addr string) httpServer {
-	return httpServer{mu: m, server: &http.Server{Addr: addr, Handler: m}}
+func New(m http.Handler, addr string) httpServer {
+	return httpServer{
+		server: &http.Server{
+			Addr:    addr,
+			Handler: m,
+		},
+		quit: make(chan bool, 1),
+	}
 }
 
 func (srv *httpServer) Addr() string {
 	return srv.server.Addr
 }
 
-func (srv *httpServer) RegisterEndpoints(routes map[string]func(http.ResponseWriter, *http.Request), httpmethods ...string) {
-	if srv.mu == nil {
-		log.Default().Println("HttpServer has no mux configured!")
-		return
-	}
-
-	for r, fun := range routes {
-		srv.mu.HandleFunc(r, fun).Methods(httpmethods...)
-	}
+func (srv *httpServer) Quit() chan<- bool {
+	return srv.quit
 }
 
-func (srv *httpServer) WrapHandler(wrapper ...func(http.Handler) http.Handler) {
-	// applies given sequence to the server's handler
-	// note that the order of passed wrappers is preserved
-	for _, w := range wrapper {
-		srv.server.Handler = w(srv.server.Handler)
-	}
-}
-
-func (srv *httpServer) ServeGracefully() {
+func (srv *httpServer) Start() <-chan bool {
+	log.Default().Printf("Starting serving at %s...", srv.Addr())
 	// create channel to listen to system signals
 	// exit peacefully once signal is recieved
-	getShutdownRequest := make(chan bool, 1)
-	gotInterruptSignal := make(chan os.Signal, 1)
-	signal.Notify(gotInterruptSignal, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// stop the server on shutdown endpoint
-	// this may actually imply some validation steps
-	srv.mu.HandleFunc("/shutdown", func(w http.ResponseWriter, r *http.Request) {
-		onShutdown(w, r)
-		getShutdownRequest <- true
-	}).Methods(http.MethodGet)
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	// launch server in a separate goroutine
 	go func() {
@@ -70,14 +49,35 @@ func (srv *httpServer) ServeGracefully() {
 		}
 	}()
 
-	// block this goroutine until given signal occurs
-	// or the context is released by request to /shutdown
+	// wait for the signal to appear
+	// and inform the server to stop
+	go func() {
+		<-quit
+		srv.quit <- true
+	}()
+
+	return srv.quit
+}
+
+func (srv *httpServer) ShutdownGracefully() {
+	timeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer func() {
+		// release resources/db connection here
+		log.Default().Print("Releasing resources...")
+		cancel()
+	}()
+
+	shutdownChan := make(chan error, 1)
+	go func() { shutdownChan <- srv.server.Shutdown(timeout) }()
+
 	select {
-	case <-gotInterruptSignal:
-	case <-getShutdownRequest:
-	case <-ctx.Done():
-		if err := srv.server.Shutdown(ctx); err != nil {
+	case <-timeout.Done():
+		log.Default().Fatal("Server shutdown timed out.")
+	case err := <-shutdownChan:
+		if err != nil {
 			log.Default().Fatalf("Server shutdown aborted: %+v\n", err)
+		} else {
+			log.Default().Print("Server Exited.")
 		}
 	}
 }
